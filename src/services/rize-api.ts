@@ -1,5 +1,5 @@
 import { GraphQLClient, gql } from 'graphql-request';
-import { RizeUser, RizeProject, RizeFocusSession, RizeProductivityMetrics, RizeAnalytics } from '../types/rize.js';
+import { RizeUser, RizeProject, RizeClient, RizeTask, RizeClientTimeEntry, RizeProjectTimeEntry, RizeTaskTimeEntry, RizeAppUsage, RizeFocusSession, RizeProductivityMetrics, RizeAnalytics } from '../types/rize.js';
 import { AuthService } from './auth.js';
 import { CacheService } from './cache.js';
 // import { McpError } from '@modelcontextprotocol/sdk/types.js'; // Sostituire con errore custom se serve
@@ -195,7 +195,7 @@ export class RizeApiService {
     try {
       const query = gql`
         query GetSessions($startTime: ISO8601DateTime!, $endTime: ISO8601DateTime!) {
-          sessions(startTime: $startTime, endTime: $endTime, statuses: ["active"]) {
+          sessions(startTime: $startTime, endTime: $endTime) {
             id
             startTime
             endTime
@@ -232,6 +232,151 @@ export class RizeApiService {
         title: session.title,
         isActive: false // Non disponibile nell'API
       }));
+    } catch (error) {
+      return [];
+    }
+  }
+
+  async getClients(): Promise<RizeClient[]> {
+    const cacheKey = 'clients';
+    const cached = this.cache.get<RizeClient[]>(cacheKey);
+    if (cached) return cached;
+    const query = gql`
+      query GetClients {
+        clients {
+          edges {
+            node {
+              id
+              name
+              color
+              emoji
+              status
+              totalTimeSpent
+              createdAt
+              updatedAt
+            }
+          }
+        }
+      }
+    `;
+    const response: any = await this.client.request(query);
+    const clients = response.clients.edges.map((e: any) => e.node);
+    this.cache.set(cacheKey, clients);
+    return clients;
+  }
+
+  async getTasks(): Promise<RizeTask[]> {
+    const cacheKey = 'tasks';
+    const cached = this.cache.get<RizeTask[]>(cacheKey);
+    if (cached) return cached;
+    const query = gql`
+      query GetTasks {
+        tasks {
+          edges {
+            node {
+              id
+              name
+              color
+              emoji
+              status
+              totalTimeSpent
+              project { id name }
+              createdAt
+              updatedAt
+            }
+          }
+        }
+      }
+    `;
+    const response: any = await this.client.request(query);
+    const tasks = response.tasks.edges.map((e: any) => e.node);
+    this.cache.set(cacheKey, tasks);
+    return tasks;
+  }
+
+  async getClientTimeEntries(startTime: string, endTime: string): Promise<RizeClientTimeEntry[]> {
+    try {
+      const query = gql`
+        query GetClientTimeEntries($startTime: ISO8601DateTime!, $endTime: ISO8601DateTime!) {
+          clientTimeEntries(startTime: $startTime, endTime: $endTime) {
+            id
+            client { id name }
+            startTime
+            endTime
+            duration
+            description
+            source
+          }
+        }
+      `;
+      const response: any = await this.client.request(query, { startTime, endTime });
+      return response.clientTimeEntries || [];
+    } catch (error) {
+      return [];
+    }
+  }
+
+  async getProjectTimeEntries(startTime: string, endTime: string): Promise<RizeProjectTimeEntry[]> {
+    try {
+      const query = gql`
+        query GetProjectTimeEntries($startTime: ISO8601DateTime!, $endTime: ISO8601DateTime!) {
+          projectTimeEntries(startTime: $startTime, endTime: $endTime) {
+            id
+            project { id name }
+            startTime
+            endTime
+            duration
+            description
+            source
+          }
+        }
+      `;
+      const response: any = await this.client.request(query, { startTime, endTime });
+      return response.projectTimeEntries || [];
+    } catch (error) {
+      return [];
+    }
+  }
+
+  async getTaskTimeEntries(startTime: string, endTime: string): Promise<RizeTaskTimeEntry[]> {
+    try {
+      const query = gql`
+        query GetTaskTimeEntries($startTime: ISO8601DateTime!, $endTime: ISO8601DateTime!) {
+          taskTimeEntries(startTime: $startTime, endTime: $endTime) {
+            id
+            task { id name }
+            startTime
+            endTime
+            duration
+            description
+            source
+          }
+        }
+      `;
+      const response: any = await this.client.request(query, { startTime, endTime });
+      return response.taskTimeEntries || [];
+    } catch (error) {
+      return [];
+    }
+  }
+
+  async getAppsAndWebsites(startTime: string, endTime: string): Promise<RizeAppUsage[]> {
+    try {
+      const query = gql`
+        query GetAppsAndWebsites($startTime: ISO8601DateTime!, $endTime: ISO8601DateTime!) {
+          appsAndWebsites(startTime: $startTime, endTime: $endTime) {
+            id
+            appName
+            title
+            urlHost
+            timeSpent
+            timeCategory { name key }
+            type
+          }
+        }
+      `;
+      const response: any = await this.client.request(query, { startTime, endTime });
+      return response.appsAndWebsites || [];
     } catch (error) {
       return [];
     }
@@ -276,11 +421,11 @@ export class RizeApiService {
       const analytics: RizeAnalytics = {
         timeframe,
         metrics,
-        insights: [], // Per ora vuoto, da implementare se disponibile
+        insights: [],
         trends: {
-          focusTime: metrics.reduce((sum: number, m: RizeProductivityMetrics) => sum + m.totalFocusTime, 0),
-          productivityScore: metrics.length > 0 ? metrics.reduce((sum: number, m: RizeProductivityMetrics) => sum + m.productivityScore, 0) / metrics.length : 0,
-          consistency: 0 // Da calcolare se necessario
+          focusTime: 0,
+          productivityScore: 0,
+          consistency: 0
         }
       };
 

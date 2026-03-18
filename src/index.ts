@@ -220,7 +220,11 @@ server.tool(
       formatted += `🔄 Context Switches: ${dayMetrics.contextSwitches}\n`;
       formatted += `☕ Break Time: ${formatDuration(dayMetrics.breakTime)}\n`;
       formatted += `📱 Distraction Time: ${formatDuration(dayMetrics.distractionTime)}\n`;
-      formatted += `🏆 Top Category: ${dayMetrics.topCategory}\n`;
+      const topCat = dayMetrics.topCategory;
+      const topCatDisplay = topCat && typeof topCat === 'object'
+        ? `${(topCat as any).name} (${formatDuration((topCat as any).timeSpent)})`
+        : String(topCat || 'Unknown');
+      formatted += `🏆 Top Category: ${topCatDisplay}\n`;
       let breakdown: Record<string, number> = {};
       if (includeBreakdown && sessions.length > 0) {
         formatted += `\n📋 Session Breakdown:\n`;
@@ -247,6 +251,143 @@ server.tool(
       };
     } catch (error) {
       logger.error('Failed to get productivity summary', { error: (error as Error).message, date });
+      throw error;
+    }
+  }
+);
+
+server.tool(
+  'list_clients',
+  { description: 'List all Rize clients with total time spent' },
+  async (): Promise<any> => {
+    try {
+      const clients = await rizeApi.getClients();
+      if (clients.length === 0) return { content: [{ type: 'text', text: 'No clients found. Add clients in Rize to track time by client.' }] };
+      let text = `👥 Clients (${clients.length})\n\n`;
+      clients.forEach(c => {
+        text += `• ${c.emoji ? c.emoji + ' ' : ''}${c.name}`;
+        if (c.totalTimeSpent) text += ` — ${formatDuration(Math.floor(c.totalTimeSpent / 60))} total`;
+        if (c.status) text += ` [${c.status}]`;
+        text += `\n  ID: ${c.id}\n`;
+      });
+      return { content: [{ type: 'text', text }] };
+    } catch (error) {
+      throw error;
+    }
+  }
+);
+
+server.tool(
+  'list_tasks',
+  { description: 'List all Rize tasks with total time spent' },
+  async (): Promise<any> => {
+    try {
+      const tasks = await rizeApi.getTasks();
+      if (tasks.length === 0) return { content: [{ type: 'text', text: 'No tasks found. Add tasks in Rize to track time by task.' }] };
+      let text = `✅ Tasks (${tasks.length})\n\n`;
+      tasks.forEach(t => {
+        text += `• ${t.emoji ? t.emoji + ' ' : ''}${t.name}`;
+        if (t.project) text += ` [${t.project.name}]`;
+        if (t.totalTimeSpent) text += ` — ${formatDuration(Math.floor(t.totalTimeSpent / 60))} total`;
+        if (t.status) text += ` (${t.status})`;
+        text += `\n  ID: ${t.id}\n`;
+      });
+      return { content: [{ type: 'text', text }] };
+    } catch (error) {
+      throw error;
+    }
+  }
+);
+
+server.tool(
+  'get_client_time',
+  {
+    startDate: z.string().describe('Start date (YYYY-MM-DD)'),
+    endDate: z.string().describe('End date (YYYY-MM-DD)')
+  },
+  async ({ startDate, endDate }: { startDate: string; endDate: string }): Promise<any> => {
+    try {
+      const entries = await rizeApi.getClientTimeEntries(`${startDate}T00:00:00`, `${endDate}T23:59:59`);
+      if (entries.length === 0) return { content: [{ type: 'text', text: `No client time entries for ${startDate} to ${endDate}.` }] };
+      const totals = new Map<string, number>();
+      entries.forEach(e => { totals.set(e.client.name, (totals.get(e.client.name) || 0) + (e.duration || 0)); });
+      let text = `👥 Client Time (${startDate} → ${endDate})\n\n`;
+      totals.forEach((secs, name) => { text += `• ${name}: ${formatDuration(Math.floor(secs / 60))}\n`; });
+      text += `\n${entries.length} entries total`;
+      return { content: [{ type: 'text', text }] };
+    } catch (error) {
+      throw error;
+    }
+  }
+);
+
+server.tool(
+  'get_project_time',
+  {
+    startDate: z.string().describe('Start date (YYYY-MM-DD)'),
+    endDate: z.string().describe('End date (YYYY-MM-DD)')
+  },
+  async ({ startDate, endDate }: { startDate: string; endDate: string }): Promise<any> => {
+    try {
+      const entries = await rizeApi.getProjectTimeEntries(`${startDate}T00:00:00`, `${endDate}T23:59:59`);
+      if (entries.length === 0) return { content: [{ type: 'text', text: `No project time entries for ${startDate} to ${endDate}.` }] };
+      const totals = new Map<string, number>();
+      entries.forEach(e => { totals.set(e.project.name, (totals.get(e.project.name) || 0) + (e.duration || 0)); });
+      let text = `📁 Project Time (${startDate} → ${endDate})\n\n`;
+      totals.forEach((secs, name) => { text += `• ${name}: ${formatDuration(Math.floor(secs / 60))}\n`; });
+      text += `\n${entries.length} entries total`;
+      return { content: [{ type: 'text', text }] };
+    } catch (error) {
+      throw error;
+    }
+  }
+);
+
+server.tool(
+  'get_task_time',
+  {
+    startDate: z.string().describe('Start date (YYYY-MM-DD)'),
+    endDate: z.string().describe('End date (YYYY-MM-DD)')
+  },
+  async ({ startDate, endDate }: { startDate: string; endDate: string }): Promise<any> => {
+    try {
+      const entries = await rizeApi.getTaskTimeEntries(`${startDate}T00:00:00`, `${endDate}T23:59:59`);
+      if (entries.length === 0) return { content: [{ type: 'text', text: `No task time entries for ${startDate} to ${endDate}.` }] };
+      const totals = new Map<string, number>();
+      entries.forEach(e => { totals.set(e.task.name, (totals.get(e.task.name) || 0) + (e.duration || 0)); });
+      let text = `✅ Task Time (${startDate} → ${endDate})\n\n`;
+      totals.forEach((secs, name) => { text += `• ${name}: ${formatDuration(Math.floor(secs / 60))}\n`; });
+      text += `\n${entries.length} entries total`;
+      return { content: [{ type: 'text', text }] };
+    } catch (error) {
+      throw error;
+    }
+  }
+);
+
+server.tool(
+  'get_apps_and_websites',
+  {
+    startDate: z.string().describe('Start date (YYYY-MM-DD)'),
+    endDate: z.string().describe('End date (YYYY-MM-DD)')
+  },
+  async ({ startDate, endDate }: { startDate: string; endDate: string }): Promise<any> => {
+    try {
+      const apps = await rizeApi.getAppsAndWebsites(`${startDate}T00:00:00`, `${endDate}T23:59:59`);
+      if (apps.length === 0) return { content: [{ type: 'text', text: `No app/website data for ${startDate} to ${endDate}.` }] };
+      const sorted = [...apps].sort((a, b) => (b.timeSpent || 0) - (a.timeSpent || 0));
+      let text = `💻 Apps & Websites (${startDate} → ${endDate})\n\n`;
+      sorted.slice(0, 20).forEach(a => {
+        text += `• ${a.appName}`;
+        if (a.urlHost) text += ` (${a.urlHost})`;
+        text += ` — ${formatDuration(Math.floor((a.timeSpent || 0) / 60))}`;
+        if (a.timeCategory && typeof a.timeCategory === 'object') text += ` [${(a.timeCategory as any).name}]`;
+        else if (a.timeCategory) text += ` [${a.timeCategory}]`;
+        text += '\n';
+      });
+      if (sorted.length > 20) text += `\n...and ${sorted.length - 20} more`;
+      return { content: [{ type: 'text', text }] };
+    } catch (error) {
       throw error;
     }
   }

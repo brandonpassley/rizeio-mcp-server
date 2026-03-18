@@ -39,6 +39,72 @@ export interface RizeProductivityMetrics {
   contextSwitches: number;
 }
 
+export interface RizeClient {
+  id: string;
+  name: string;
+  color?: string;
+  emoji?: string;
+  status?: string;
+  timeSpent?: number;
+  totalTimeSpent?: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RizeTask {
+  id: string;
+  name: string;
+  color?: string;
+  emoji?: string;
+  status?: string;
+  project?: { id: string; name: string };
+  timeSpent?: number;
+  totalTimeSpent?: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RizeClientTimeEntry {
+  id: string;
+  client: { id: string; name: string };
+  startTime: string;
+  endTime?: string;
+  duration: number;
+  description?: string;
+  source?: string;
+}
+
+export interface RizeProjectTimeEntry {
+  id: string;
+  project: { id: string; name: string };
+  startTime: string;
+  endTime?: string;
+  duration: number;
+  description?: string;
+  source?: string;
+}
+
+export interface RizeTaskTimeEntry {
+  id: string;
+  task: { id: string; name: string };
+  startTime: string;
+  endTime?: string;
+  duration: number;
+  description?: string;
+  source?: string;
+}
+
+export interface RizeAppUsage {
+  id: string;
+  appName: string;
+  title?: string;
+  url?: string;
+  urlHost?: string;
+  timeSpent: number;
+  timeCategory?: { name: string; key: string } | string;
+  type?: string;
+}
+
 export interface RizeTimeEntry {
   id: string;
   userId: string;
